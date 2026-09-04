@@ -1,9 +1,144 @@
-Payload URL 
-http://c3cudevopstest:8080/github-webhook/
+To deploy the code which was created by developer we use CI/CD pipeline
+CI- Continuous Integration
+CD-Continuous Deliver/Continuous Deployment
+Continuous deliver - if we do manually with maven commands
+Continuous Deployment - it is automation using maven tool
 
-Content type *
-application/json
+First developer will write the code and push to GitHub. 
+From GitHub, we will build, test and deploy through CI/CD
+CI means it is a combination of Continuous build + Continuous test
+Once the code was ready in Github, the build will compile the code and test 
+Here we are using the Jenkins tool for CI/CD
+For deploying the application we need three serves
+1. Jenkins Server - to build and test the code and create the package(war/jar/ear) file
+2. Application server - to run the application using tomcat
+3. Nexus server - to store the artificats
 
-To run the build automatically we need to select GitScm
+1. So in Jenkins server, first we need to install the jenkins
+For Jenkins setup we need to install java first and 
+yum install java-21
+java - version
 
-context path : your product name
+from the jenkins.io website we can download and perform the steps
+sudo wget -O /etc/yum.repos.d/jenkins.repo  https://pkg.jenkins.io/rpm-stable/jenkins.repo
+yum install jenkins -y
+systemctl status jenkins
+systemctl start jenkins
+systemctl enable jenkins
+login to jenkins Dashboard using the Ip address and port (For Jenkins the port number is 8080)
+http://c3cudevopstest:8080  (Jenkins server Ip)
+cat /var/lib/jenkins/secrets/initialAdminPassword
+
+To connect the Github with Jenkins server we need to install the Git in Jenkins serveryum install git -y
+yum install git -y
+
+2. Tomcat setup in application server
+yum install java-21
+   77  wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.121/bin/apache-tomcat-9.0.121.tar.gz
+   78  tar -zxvf apache-tomcat-9.0.121.tar.gz
+   79  sed -i '56 a\<role rolename="manager-gui"/>' apache-tomcat-9.0.121/conf/tomcat-users.xml
+   80  sed -i '57 a\<role rolename="manager-script"/>' apache-tomcat-9.0.121/conf/tomcat-users.xml
+   81  sed -i '58 a\<user username="tomcat" password="admin@123" roles="manager-gui, manager-script"/>' apache-tomcat-9.0.121/conf/tomcat-users.xml
+   82  sed -i '59 a\</tomcat-users>' apache-tomcat-9.0.121/conf/tomcat-users.xml
+   83  sed -i '56d' apache-tomcat-9.0.121/conf/tomcat-users.xml
+   84  sed -i '21d' apache-tomcat-9.0.121/webapps/manager/META-INF/context.xml
+   85  sed -i '22d' apache-tomcat-9.0.121/webapps/manager/META-INF/context.xml
+   86  sh apache-tomcat-9.0.121/bin/startup.sh
+
+3. setup Nexus server - to store the artificats
+Download from https://help.sonatype.com/en/download.html --> tar file https://download.sonatype.com/nexus/3/nexus-3.96.0-09-linux-x86_64.tar.gz
+cd /opt
+wget https://download.sonatype.com/nexus/3/nexus-3.96.0-09-linux-x86_64.tar.gz
+tar -xvf tar file and it will create to files and using the to the nexus with script
+make sure the script execute with nexus user only for that 
+useradd nexus
+chown -R nexus:nexus files
+switch to nexus user sudo - nexus
+cd nexus-3.96.0-09/bin
+./nexus start
+
+And you can login the repository using url http://hostname:8081 (for nexus the port is 8081) and the setup the nexus account
+also make sure the port has to been allowed in inbound rule on AWS security groups
+Once login to nexus, restart the nexus service
+./nexus restart and refresh the pageit will show for the license aggrement and accept
+
+If java code builds it will give jar/war/ear files
+   java  --> jar file
+   java + spring Boot --> war file
+   j2ee --> ear file
+if pythin code builds it will give modules
+if node js code builds it will give modules
+
+To create the repositoryin Nexus to store the artificats 
+Go to settings --> repositories  --> create repository --> maven to host (for build)
+Then configure 
+   Name - Any name
+   Deployment policy - Allow redeploy option and create
+Once it create it will display in dashboard under browse folder
+
+And In the Jenkins Dashboard, we can create the new freestyle Project 
+In configure,
+
+select the source code management - Connect and manage your code repository to automatically pull the latest code for your builds.
+    Repository URL - provide which repo your connecting from Github that repo https url and branch name
+    credentials - if the repo is public none or if private create the credentials using Github credentials
+	Branches to build - branch name In which branch the code is present
+
+Triggeres - Set up automated actions that start your build based on specific events, like code changes or scheduled times.
+   If we select GitHub hook trigger for GITScm polling - We need to configure the webhook in GitHub for that repo
+   If we select PollSCM - its like crontab entry * * * * *
+
+Build Steps - Automate your build process with ordered tasks like code compilation, testing, and deployment.
+   For configuring the build step, we need to setup the maven tools by using Maven Installation option and select the version as lates
+   Once tools setup and under Build steps select Invoke top-level Maven targets
+   maven version as what we created while Maven installation
+   Goals means maven commands - clean install
+   
+To integrate the nexus with jenkins we need to install plugin  Nexus Artifact uploader and configure in build steps 
+   Select Nexus artifact uploader
+   Nexus version : Nexus3
+   Protocol: HTTP
+   Nexus URl: hostname:8081
+   credentials: Nexus credentials
+   groupID: from Pom.xml file
+   Version: from Pom.xml file
+   Repository: nexus repo name 
+   ArtifactID: from Pom.xml file 
+   Type:file format (war)
+   File: target/artifactid-version.war   format
+   
+Once you give all inputs the run the build now, it will store the artifcats in nexus repository
+
+If the code was upgraded to latest version of application and while running the build now 
+make sure we need to update the version to latest under build steps --> nexus artifact uploader
+    Select Nexus artifact uploader
+	Version: from Pom.xml file (from latest code pom.xml file)
+
+Post-build Actions - Define what happens after a build completes, like sending notifications, archiving artifacts, or triggering other jobs.
+   We need to install the plugins like deploy to container, 
+   
+   Select - Deploy war/ear to a container
+   WAR/EAR files - Should be output file target/*.war
+   Context path - Reference name 
+   Containers details like 
+   Container - select latest tomcat version
+   tomcat credentials - tomcat and admin@123
+   tomcat url - http://c3cudockertest02:8080/  (Note application server ip address)
+
+After all the configure steps are setup we can run the build now option
+This will automatically build the proess to compile the code from Github to jenkins server and test and deployed the application in application server
+
+Process:
+
+Code --> Build --> Test --> artifcats --> Deployment
+
+Steps to install maven manually in jenkins server 
+sudo curl -O https://dlcdn.apache.org/maven/maven-3/3.9.16/binaries/apache-maven-3.9.16-bin.tar.gz
+  102  sudo tar -xzf apache-maven-3.9.16-bin.tar.gz
+  103  sudo ln -s /opt/apache-maven-3.9.16 /opt/maven
+  104  sudo vi /etc/profile.d/maven.sh
+  105  mvn -version
+  106  ll
+  107  source /etc/profile.d/maven.sh
+  108  mvn -version
+
