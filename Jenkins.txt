@@ -3,3 +3,5 @@ http://c3cudevopstest:8080/github-webhook/
 
 Content type *
 application/json
+
+To run the build automatically we need to select GitScm
