@@ -5,3 +5,5 @@ Content type *
 application/json
 
 To run the build automatically we need to select GitScm
+
+context path : your product name
