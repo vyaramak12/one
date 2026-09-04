@@ -1,0 +1,5 @@
+Payload URL 
+http://c3cudevopstest:8080/github-webhook/
+
+Content type *
+application/json
